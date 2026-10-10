@@ -428,13 +428,45 @@
         csvNum(r.coolTons, 2), csvNum(r.coolKw, 1), csvNum(r.heatKw, 1), csvTxt(r.warnings.join(' | '))]);
     });
     row(['TOTAL', '', '', '', '', '', '', '', '', '', '', '', '', '', csvNum(res.total.vot, 1), csvNum(res.total.votCfm, 0), csvNum(res.total.coolTons, 2), '', csvNum(res.total.heatKw, 1)]);
-    download('﻿' + L.join('\r\n'), slug(scen.name) + '.csv', 'text/csv;charset=utf-8');
+    exportBox('CSV — ' + scen.name, L.join('\r\n'), slug(scen.name) + '.csv', 'text/csv;charset=utf-8', '\uFEFF');
   }
   function slug(s) { return norm(s).replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'scenario'; }
   function download(text, name, type) {
     var blob = new Blob([text], { type: type }), a = document.createElement('a');
     a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click();
     setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 500);
+  }
+
+  // ---------- Dialogues intégrés (remplacent confirm / prompt) ----------
+  var dlgCb = null, dlgExport = null;
+  function dialog(o, cb) {
+    dlgCb = cb || null; dlgExport = null;
+    $('#dlgTitle').textContent = o.title || '';
+    $('#dlgBody').innerHTML = (o.message ? '<p>' + esc(o.message) + '</p>' : '') +
+      (o.input !== undefined ? '<input type="text" class="dlg-input" id="dlgInput" value="' + esc(o.input) + '">' : '');
+    $('#dlgActions').innerHTML = (o.cancel === false ? '' : '<button type="button" data-action="dlg-cancel">Annuler</button>') +
+      '<button type="button" class="' + (o.danger ? 'danger-solid' : 'primary') + '" data-action="dlg-ok">' + esc(o.ok || 'OK') + '</button>';
+    $('#dialog').hidden = false;
+    var inp = $('#dlgInput'); if (inp) { inp.focus(); inp.select(); } else $('[data-action="dlg-ok"]').focus();
+  }
+  function exportBox(title, text, name, type, prefix) {
+    dlgCb = null; dlgExport = { text: (prefix || '') + text, name: name, type: type };
+    $('#dlgTitle').textContent = title;
+    $('#dlgBody').innerHTML = '<p class="muted small">Copiez le contenu et collez-le dans Excel ou un fichier texte' + (name.slice(-4) === '.csv' ? ' (séparateur « ; », virgule décimale)' : '') + (window.V621_NO_DOWNLOAD ? '.' : ', ou téléchargez le fichier.') + '</p>' +
+      '<textarea class="dlg-text" id="dlgText" wrap="off" readonly>' + esc(text) + '</textarea>';
+    $('#dlgActions').innerHTML = (window.V621_NO_DOWNLOAD ? '' : '<button type="button" data-action="dlg-download">Télécharger ' + esc(name) + '</button>') +
+      '<button type="button" data-action="dlg-cancel">Fermer</button><button type="button" class="primary" data-action="dlg-copy">Copier</button>';
+    $('#dialog').hidden = false;
+  }
+  function copyExport(btn) {
+    var ta = $('#dlgText'), done = function () { btn.textContent = 'Copié'; setTimeout(function () { btn.textContent = 'Copier'; }, 1500); };
+    var fallback = function () { ta.focus(); ta.select(); try { if (document.execCommand('copy')) done(); } catch (e) { /* sélection laissée à l'utilisateur */ } };
+    try { navigator.clipboard.writeText(ta.value).then(done, fallback); } catch (e) { fallback(); }
+  }
+  function closeDialog(ok) {
+    var cb = dlgCb, inp = $('#dlgInput'), val = inp ? inp.value.trim() : true;
+    $('#dialog').hidden = true; dlgCb = null; dlgExport = null;
+    if (ok && cb) cb(val);
   }
 
   // ---------- Événements ----------
@@ -481,6 +513,11 @@
   });
 
   document.addEventListener('keydown', function (ev) {
+    if (!$('#dialog').hidden) {
+      if (ev.key === 'Escape') closeDialog(false);
+      if (ev.key === 'Enter' && ev.target.id === 'dlgInput') closeDialog(true);
+      return;
+    }
     if ($('#picker').hidden) {
       if (ev.key === 'Enter' && ev.target.classList && ev.target.classList.contains('in') && ev.target.tagName === 'INPUT') ev.target.blur();
       return;
@@ -497,6 +534,7 @@
     var pick = ev.target.closest('#pickerList tr.pick');
     if (pick && pickerCb) { pickerCb(pick.getAttribute('data-cat')); closePicker(); return render(); }
     if (ev.target.id === 'picker') return closePicker();
+    if (ev.target.id === 'dialog') return closeDialog(false);
     var b = ev.target.closest('[data-action]');
     if (!b) return;
     var a = b.getAttribute('data-action'), scen = sc(), id = b.getAttribute('data-id'), sid = b.getAttribute('data-sid');
@@ -521,39 +559,53 @@
         scen.locals.splice(scen.locals.indexOf(src) + 1, 0, cp); break;
       case 'loc-del':
         var dl = scen.locals.filter(function (x) { return x.id === id; })[0];
-        if (dl && confirm('Supprimer le local « ' + dl.name + ' » ?')) scen.locals.splice(scen.locals.indexOf(dl), 1);
-        break;
+        if (dl) dialog({ title: 'Supprimer le local', message: 'Supprimer « ' + dl.name + ' » ?', ok: 'Supprimer', danger: true },
+          function () { scen.locals.splice(scen.locals.indexOf(dl), 1); render(); });
+        return;
       case 'sys-add': scen.systems.push(newSystem(nextSysName(scen))); break;
       case 'sys-del':
         var ds = scen.systems.filter(function (x) { return x.id === sid; })[0];
         var n = scen.locals.filter(function (l) { return l.sysId === sid; }).length;
-        if (ds && confirm('Supprimer le système « ' + ds.name + ' » ?' + (n ? '\n' + n + ' local(aux) deviendront non assignés.' : ''))) {
+        if (ds) dialog({ title: 'Supprimer le système', message: 'Supprimer « ' + ds.name + ' » ?' + (n ? ' ' + n + ' local(aux) deviendront non assignés.' : ''), ok: 'Supprimer', danger: true }, function () {
           scen.systems.splice(scen.systems.indexOf(ds), 1);
           scen.locals.forEach(function (l) { if (l.sysId === sid) l.sysId = ''; });
           if (filterSys === sid) filterSys = '';
-        }
-        break;
+          render();
+        });
+        return;
       case 'sc-new':
-        var nm = prompt('Nom du nouveau scénario :', 'Nouveau scénario');
-        if (!nm) return;
-        var ns = { id: uid('sc'), name: nm, note: '', systems: [newSystem('UCT-01')], locals: [] };
-        state.scenarios.push(ns); state.active = ns.id; filterSys = ''; break;
+        dialog({ title: 'Nouveau scénario', message: 'Nom du scénario :', input: 'Nouveau scénario', ok: 'Créer' }, function (nm) {
+          if (!nm) return;
+          var ns = { id: uid('sc'), name: nm, note: '', systems: [newSystem('UCT-01')], locals: [] };
+          state.scenarios.push(ns); state.active = ns.id; filterSys = ''; render();
+        });
+        return;
       case 'sc-dup':
         var d = clone(scen); d.id = uid('sc'); d.name = scen.name + ' (variante)';
         state.scenarios.splice(state.scenarios.indexOf(scen) + 1, 0, d); state.active = d.id; break;
       case 'sc-rename':
-        var rn = prompt('Nouveau nom du scénario :', scen.name); if (rn) scen.name = rn; break;
+        dialog({ title: 'Renommer le scénario', message: 'Nouveau nom :', input: scen.name, ok: 'Renommer' }, function (rn) { if (rn) { scen.name = rn; render(); } });
+        return;
       case 'sc-del':
-        if (state.scenarios.length < 2) { alert('Le projet doit contenir au moins un scénario.'); return; }
-        if (!confirm('Supprimer le scénario « ' + scen.name + ' » ?')) return;
-        state.scenarios.splice(state.scenarios.indexOf(scen), 1); state.active = state.scenarios[0].id; filterSys = ''; break;
+        if (state.scenarios.length < 2) { dialog({ title: 'Suppression impossible', message: 'Le projet doit contenir au moins un scénario.', cancel: false }); return; }
+        dialog({ title: 'Supprimer le scénario', message: 'Supprimer « ' + scen.name + ' » et tous ses locaux ?', ok: 'Supprimer', danger: true }, function () {
+          state.scenarios.splice(state.scenarios.indexOf(scen), 1); state.active = state.scenarios[0].id; filterSys = ''; render();
+        });
+        return;
       case 'params-reset': state.params = clone(C.DEFAULT_PARAMS); break;
       case 'load-sample':
-        if (!confirm('Ajouter les 3 scénarios d\'exemple du fichier Excel au projet ?')) return;
-        S.scenarios().forEach(function (s) { s.id = uid('sc'); state.scenarios.push(s); });
-        state.active = state.scenarios[state.scenarios.length - 3].id; break;
+        dialog({ title: 'Exemple Excel', message: 'Ajouter au projet les 3 scénarios de l\'onglet « Calcul Ville » ?', ok: 'Ajouter' }, function () {
+          S.scenarios().forEach(function (s) { s.id = uid('sc'); state.scenarios.push(s); });
+          state.active = state.scenarios[state.scenarios.length - 3].id; render();
+        });
+        return;
       case 'export-csv': exportCsv(); return;
-      case 'export-json': download(JSON.stringify(state, null, 2), 'projet-ventilation-62-1.json', 'application/json'); return;
+      case 'export-json':
+        exportBox('Projet (.json)', JSON.stringify(state, null, 2), 'projet-ventilation-62-1.json', 'application/json'); return;
+      case 'dlg-ok': closeDialog(true); return;
+      case 'dlg-cancel': closeDialog(false); return;
+      case 'dlg-copy': copyExport(b); return;
+      case 'dlg-download': download(dlgExport.text, dlgExport.name, dlgExport.type); return;
       default: return;
     }
     render();
@@ -567,7 +619,7 @@
         var p = JSON.parse(r.result);
         if (!p.scenarios || !p.scenarios.length || !p.params) throw new Error('format');
         state = p; state.tab = state.tab || 'dashboard'; filterSys = ''; render();
-      } catch (e) { alert('Fichier de projet invalide.'); }
+      } catch (e) { dialog({ title: 'Fichier invalide', message: 'Ce fichier n\'est pas un projet enregistré par cette application (.json).', cancel: false }); }
       input.value = '';
     };
     r.readAsText(file);

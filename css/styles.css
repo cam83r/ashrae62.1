@@ -85,7 +85,7 @@ select { border: 1px solid var(--border); border-radius: 6px; padding: .3rem .4r
 /* ---------- Onglets ---------- */
 .tabs {
   display: flex; gap: .2rem; padding: 0 16px; background: var(--surface);
-  border-bottom: 1px solid var(--border); overflow-x: auto; position: sticky; top: 0; z-index: 5;
+  border-bottom: 1px solid var(--border); overflow-x: auto; position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5;
 }
 .tabs button {
   border: 0; border-bottom: 3px solid transparent; border-radius: 0; background: none;
@@ -189,6 +189,13 @@ button.cat small { color: var(--muted); }
 .modal-body { overflow-y: auto; padding: 0 1rem 1rem; }
 .modal-body tr.pick { cursor: pointer; }
 .modal-body tr.pick.current td { background: var(--accent-soft); }
+
+.modal-box.dlg { width: min(560px, 100%); }
+.dlg-body { padding: .8rem 1rem; display: grid; gap: .6rem; }
+.dlg-input { width: 100%; padding: .45rem .6rem; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); }
+.dlg-text { width: 100%; height: 260px; font: .78rem/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; padding: .5rem; border: 1px solid var(--border); border-radius: 6px; background: var(--surface-2); color: var(--text); resize: vertical; }
+.dlg-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: .5rem; padding: .7rem 1rem 1rem; }
+button.danger-solid { background: var(--bad); border-color: var(--bad); color: var(--surface); }
 
 .foot { color: var(--muted); font-size: .78rem; text-align: center; padding: 1rem 16px 2rem; }
 .empty { color: var(--muted); padding: 1rem; text-align: center; }
