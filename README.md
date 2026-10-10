@@ -17,7 +17,7 @@ utiliser **Enregistrer projet (.json)** / **Ouvrir projet** pour le conserver ou
 | Locaux | Ajout / édition / duplication / suppression, assignation à un système, sélecteur de catégorie 62.1 avec recherche |
 | Systèmes | Création dynamique (UCT-0N), type (multizone, zone unique, 100 % air neuf), Ez, méthode Ev, facteur de courte durée, analyse d'événement §6.2.6.2 |
 | Paramètres | Conditions été / hiver, constantes, psychrométrie calculée (Magnus) |
-| Table 62.1 | Tableau 6.2.2.1 complet (Rp, Ra, densité par défaut), recherche FR/EN |
+| Norme 62.1 | Équations de 62.1-2016, tableaux 6.2.2.1 (Rp, Ra, notes A–H, densité, débit combiné, classe d'air), 6.2.2.2 (Ez) et 6.2.5.2 (Ev) |
 | Comparaison | Vot et charges de tous les scénarios, écart vs un scénario de référence |
 | Validation Excel | Recalcul des 3 scénarios du fichier et comparaison cellule par cellule |
 
@@ -29,11 +29,15 @@ utiliser **Enregistrer projet (.json)** / **Ouvrir projet** pour le conserver ou
 - Local : `Az = pi² × 0,092903` ; `Ra = max(Ra assis, Ra actif)` ;
   occupants = `Pz·%assis·Rp_assis` et `Pz·%actif·Rp_actif` combinés par « Max » ou « Somme » ;
   `Vbz = occupants + Ra·Az` ; `Voz = Vbz / Ez` ; `Zpz = Voz / Vpz`.
-- Multizone : `D = Ps / ΣPz` ; `Vou = D·Σ(Rp·Pz) + Σ(Ra·Az)` ;
-  Ev simplifiée (`0,88·D + 0,22` si D < 0,60, sinon 0,75) ou selon le tableau (Zp max) ;
-  `Vot = Vou / Ev`.
+- Multizone : `D = Ps / ΣPz` ; `Vou = D·Σ(Rp·Pz) + Σ(Ra·Az)` ; `Vot = Vou / Ev`, avec Ev au choix :
+  - **Tableau** 6.2.5.2 par paliers (comme l'Excel) ou **interpolé** (note 2) ;
+  - **Annexe A** : `Xs = Vou / Vps`, `Evz = 1 + Xs − Zpz` (alimentation simple) ou
+    `Evz = (Fa + Xs·Fb − Zpz·Ep·Fc) / Fa` (recirculation secondaire, avec Vdz et Er par local), `Ev = min(Evz)` ;
+  - **Simplifiée** (`0,88·D + 0,22` si D < 0,60, sinon 0,75) : méthode du fichier Excel, absente de 62.1-2016.
+- Ez choisi directement ou depuis le tableau 6.2.2.2 ; Pz par défaut = densité × Az (§6.2.2.1.1) ;
+  plancher DCV Σ(Ra·Az) (§6.2.7.1.2).
 - Zone unique : `Vot = Voz × facteur de courte durée`, ou analyse d'événement
-  (`T = 3·v / Vbz_évén.`, `Vbz_conception = max(Vbz_typique, Vbz_moyen sur T)`), comme la section 7.3.
+  (`T = 50·v / Vbz_évén.`, éq. 6.2.6.2-2, `Vbz_conception = max(Vbz_typique, Vbz_moyen sur T)`), comme la section 7.3.
 - 100 % air neuf : `Vot = ΣVoz`.
 - Charges : refroidissement `ρ·Vot/1000·Δh / 3,517` (t) ; chauffage `ρ·1,006·Vot/1000·ΔT` (kW).
 
@@ -43,17 +47,16 @@ utiliser **Enregistrer projet (.json)** / **Ouvrir projet** pour le conserver ou
 node tests/validate.js
 ```
 
-Recalcule les sections 3, 4 et 7 de l'onglet « Calcul Ville » et compare 67 valeurs
+Recalcule les sections 3, 4 et 7 de l'onglet « Calcul Ville » et compare les valeurs
 (psychrométrie, Rp/Ra des 10 catégories du fichier, ΣPz, Ps, D, Vou, Zp max, Vot, charges,
-analyse d'événement du gymnase) aux valeurs calculées par Excel : **aucun écart**.
+analyse d'événement du gymnase) aux valeurs calculées par Excel, puis vérifie le tableau 6.2.5.2
+(interpolation) et l'annexe A sur des cas calculés à la main : 81 vérifications, **aucun écart**.
 
 ## Référence normative
 
-- Table : ASHRAE 62.1-2019, tableau 6.2.2.1 (unités SI), 77 catégories non résidentielles.
-- Procédure multizone et numérotation des § : 62.1-2016, comme le fichier Excel
-  (dans les éditions 2019 et 2022, la procédure multizone détaillée est à l'annexe A).
-- Les valeurs Rp/Ra doivent être confirmées avec l'exemplaire officiel de la norme et
-  l'édition exigée par le CNB 2015 modifié Québec.
+- ANSI/ASHRAE 62.1-2016 : tableau 6.2.2.1 (78 catégories, unités SI), tableaux 6.2.2.2 et 6.2.5.2,
+  annexe A, vérifiés contre l'exemplaire de la norme.
+- L'édition exigée par le CNB 2015 modifié Québec reste à confirmer.
 
 Outil de prédimensionnement : ne remplace pas le calcul signé du professionnel.
 

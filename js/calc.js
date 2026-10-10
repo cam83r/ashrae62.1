@@ -61,11 +61,35 @@
     var voz = vbz / e;
     var vpz = num(loc.vpz);
     var zpz = vpz > 0 ? voz / vpz : 0;
+    // Densité par défaut (§6.2.2.1.1, exception 2) : catégorie du mode assis/usuel
+    var pzDefault = catA && catA.densite ? catA.densite * az / 100 : null;
     return {
       id: loc.id, az: az, pz: pz, occupied: !!loc.occ, rpA: rpA, rpB: rpB, ra: ra,
-      occ: occ, surf: surf, vbz: vbz, ez: e, voz: voz, vpz: vpz, zpz: zpz,
-      missingCat: !catA || !catB
+      occ: occ, surf: surf, vbz: vbz, ez: e, voz: voz, vpz: vpz, zpz: zpz, pzDefault: pzDefault,
+      vdz: num(loc.vdz), er: num(loc.er), missingCat: !catA || !catB
     };
+  }
+
+  // Tableau 6.2.5.2, note 2 : interpolation linéaire entre 0,15 et 0,55
+  function evTableInterp(zp) {
+    if (zp <= 0.15) return 1.0;
+    if (zp > 0.55) return null;
+    return 1.15 - zp; // droite passant par (0,15 ; 1,0) et (0,55 ; 0,6)
+  }
+
+  // Annexe A — efficacité de ventilation d'une zone (Evz)
+  //  alimentation simple : Evz = 1 + Xs − Zpz (A1.2.1)
+  //  recirculation secondaire : Evz = (Fa + Xs·Fb − Zpz·Ep·Fc) / Fa (A1.2.2-1)
+  function evZone(z, xs) {
+    if (z.vdz > 0) {
+      var ep = Math.min(1, z.vpz / z.vdz);          // A1.2.2-5
+      var er = z.er;
+      var fa = ep + (1 - ep) * er;                   // A1.2.2-2
+      var fb = ep;                                   // A1.2.2-3
+      var fc = 1 - (1 - z.ez) * (1 - er) * (1 - ep); // A1.2.2-4
+      return { evz: fa > 0 ? (fa + xs * fb - z.zpz * ep * fc) / fa : null, ep: ep, fa: fa, fb: fb, fc: fc, recirc: true };
+    }
+    return { evz: 1 + xs - z.zpz, ep: 1, recirc: false };
   }
 
   function evTable(zp) {
@@ -98,7 +122,7 @@
         var vbzTyp = r.sumVbz;
         var vbzEvt = num(ev.n) * rpE + r.sumSurf;
         var vol = zones.reduce(function (s, z) { return s + z.az; }, 0) * num(ev.height);
-        var T = vbzEvt > 0 ? 3 * vol / (vbzEvt * 60 / 1000) : 0;        // minutes
+        var T = vbzEvt > 0 ? 50 * vol / vbzEvt : 0;                      // éq. 6.2.6.2-2 (SI), minutes
         var dur = num(ev.duration);
         var vbzMoy = dur >= T ? vbzEvt : (vbzEvt * dur + vbzTyp * (T - dur)) / T;
         var vbzConc = Math.max(vbzTyp, vbzMoy);
@@ -126,25 +150,51 @@
       r.zpMax = crit ? crit.zpz : 0;
       r.critId = crit ? crit.id : null;
       r.evTab = evTable(r.zpMax);
-      r.evMethod = sys.evMethod === 'Tableau' ? 'Tableau' : 'Simplifiée';
-      if (r.evMethod === 'Tableau' && r.evTab !== null) {
-        r.ev = r.evTab;
-        r.evSource = 'Tableau (Zp max)';
+      r.evTabInterp = evTableInterp(r.zpMax);
+
+      // Annexe A : Xs = Vou / Vps (A1.1) ; Ev = min(Evz) (A1.3)
+      r.vpsSum = zones.reduce(function (s, z) { return s + z.vpz; }, 0);
+      r.vpsAuto = !(num(sys.vps) > 0);
+      r.vps = r.vpsAuto ? r.vpsSum : num(sys.vps);
+      r.xs = r.vps > 0 ? r.vou / r.vps : null;
+      r.evA = null; r.evACritId = null;
+      if (r.xs !== null) {
+        zones.forEach(function (z) {
+          if (!(z.vpz > 0)) return;
+          var e = evZone(z, r.xs);
+          z.evz = e.evz; z.ep = e.ep; z.recirc = e.recirc;
+          if (e.evz !== null && (r.evA === null || e.evz < r.evA)) { r.evA = e.evz; r.evACritId = z.id; }
+        });
+      }
+
+      var m = sys.evMethod;
+      r.evMethod = ['Tableau', 'Tableau interpolé', 'Annexe A'].indexOf(m) >= 0 ? m : 'Simplifiée';
+      var chosen = null;
+      if (r.evMethod === 'Tableau') chosen = r.evTab;
+      else if (r.evMethod === 'Tableau interpolé') chosen = r.evTabInterp;
+      else if (r.evMethod === 'Annexe A') chosen = r.evA !== null && r.evA > 0 ? r.evA : null;
+      if (r.evMethod === 'Simplifiée') {
+        r.ev = r.evSimple; r.evSource = 'Simplifiée';
+      } else if (chosen !== null) {
+        r.ev = chosen; r.evSource = r.evMethod;
       } else {
-        r.ev = r.evSimple;
-        r.evSource = 'Simplifiée';
-        if (r.evMethod === 'Tableau') {
-          r.warnings.push('Zp max > 0,55 : méthode « Tableau » non applicable (annexe A requise) — Ev simplifiée retenue, comme dans le fichier Excel.');
+        r.ev = r.evSimple; r.evSource = 'Simplifiée (repli)';
+        if (r.evMethod === 'Annexe A') {
+          r.warnings.push(r.evA !== null ? 'Annexe A : Ev = ' + r.evA.toFixed(2) + ' ≤ 0 — augmenter Vpz du local critique ou Vps. Ev simplifiée retenue.' : 'Annexe A : aucun Vpz saisi. Ev simplifiée retenue.');
+        } else {
+          r.warnings.push('Zp max > 0,55 : tableau 6.2.5.2 non applicable (annexe A requise) — Ev simplifiée retenue, comme dans le fichier Excel.');
         }
       }
       r.vot = r.ev > 0 ? r.vou / r.ev : 0;
-      if (r.zpMax > 0.55) r.warnings.push('Zp max = ' + r.zpMax.toFixed(2) + ' > 0,55 : vérifier selon l\'annexe A (local critique).');
+      if (r.zpMax > 0.55 && r.evMethod !== 'Annexe A') r.warnings.push('Zp max = ' + r.zpMax.toFixed(2) + ' > 0,55 : le tableau 6.2.5.2 renvoie à l\'annexe A (Ev annexe A = ' + (r.evA === null ? '—' : r.evA.toFixed(2)) + ').');
       if (zones.some(function (z) { return z.vpz <= 0; })) r.warnings.push('Un ou plusieurs locaux sans Vpz : Zpz = 0 (exclus du local critique).');
     }
 
     if (zones.some(function (z) { return z.missingCat; })) r.warnings.push('Catégorie 62.1 manquante pour au moins un local.');
     if (!zones.length) r.warnings.push('Aucun local assigné.');
 
+    // Plancher DCV (§6.2.7.1.2) : la zone de respiration ne descend pas sous Ra·Az
+    r.dcvMin = r.sumSurf;
     r.votCfm = r.vot * LS_TO_CFM;
     var ld = loads(r.vot, p, psy);
     r.coolTons = ld.coolTons; r.coolKw = ld.coolKw; r.heatKw = ld.heatKw;
@@ -162,7 +212,7 @@
 
   var api = {
     DEFAULT_PARAMS: DEFAULT_PARAMS, LS_TO_CFM: LS_TO_CFM, KW_PER_TON: KW_PER_TON, CP_AIR: CP_AIR,
-    psychro: psychro, loads: loads, zone: zone, evTable: evTable, system: system, scenario: scenario
+    psychro: psychro, loads: loads, zone: zone, evTable: evTable, evTableInterp: evTableInterp, evZone: evZone, system: system, scenario: scenario
   };
   root.VCalc = api;
   if (typeof module !== 'undefined' && module.exports) module.exports = api;

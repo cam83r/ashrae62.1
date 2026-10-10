@@ -37,5 +37,26 @@ VSample.scenarios().forEach(function (sc) {
   });
 });
 
+// 62.1-2016 : tableau 6.2.5.2 (paliers et interpolation) et annexe A
+cmp('evTable(0.30)', VCalc.evTable(0.30), 0.8);
+cmp('evTableInterp(0.30)', VCalc.evTableInterp(0.30), 0.85);
+cmp('evTableInterp(0.15)', VCalc.evTableInterp(0.15), 1.0);
+cmp('evTableInterp(0.55)', VCalc.evTableInterp(0.55), 0.6);
+cmp('evZone simple', VCalc.evZone({ vdz: 0, vpz: 100, zpz: 0.5, ez: 1 }, 0.3).evz, 0.8);
+// Recirculation secondaire : Ep = 0,5 ; Fa = 0,875 ; Fb = 0,5 ; Fc = 1 ; Evz = (0,875 + 0,15 − 0,25) / 0,875
+cmp('evZone recirc', VCalc.evZone({ vdz: 200, vpz: 100, zpz: 0.5, ez: 1, er: 0.75 }, 0.3).evz, 0.775 / 0.875);
+// Ez = 0,8, Er = 0 : Fc = 1 − 0,2·1·0,5 = 0,9 ; Fa = 0,5 ; Evz = (0,5 + 0,15 − 0,5·0,5·0,9) / 0,5
+cmp('evZone recirc Ez 0.8', VCalc.evZone({ vdz: 200, vpz: 100, zpz: 0.5, ez: 0.8, er: 0 }, 0.3).evz, (0.5 + 0.15 - 0.225) / 0.5);
+(function () {
+  var sc = VSample.scenarios()[0]; sc.systems[0].evMethod = 'Annexe A';
+  var r = VCalc.scenario(sc, p, T621.get).systems[0];
+  var vou = ref.sc3.s1.vou, xs = vou / 2305, ev = 1 + xs - 0.9010269966241135;
+  cmp('annexe A sc3 Vps', r.vps, 2305); cmp('annexe A sc3 Xs', r.xs, xs); cmp('annexe A sc3 Ev', r.ev, ev); cmp('annexe A sc3 Vot', r.vot, vou / ev);
+})();
+// Table 6.2.2.1 (2016) : quelques valeurs vérifiées
+cmp('daycare sickroom densité', T621.get('edu_daycare_sick').densite, 25);
+cmp('dwelling unit Rp', T621.get('res_dwelling').rp, 2.5);
+cmp('office combiné', T621.get('off_office').combine, 8.5);
+
 console.log(checks + ' vérifications, ' + fails + ' échec(s).');
 process.exit(fails ? 1 : 0);

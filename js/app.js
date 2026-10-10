@@ -69,7 +69,7 @@
   // ---------- Rendu général ----------
   function render() {
     var focusKey = document.activeElement && document.activeElement.getAttribute('data-k');
-    $('#edition').textContent = 'Table : ' + T.EDITION + ' · procédure multizone et références § selon 62.1-2016 (comme le fichier Excel)';
+    $('#edition').textContent = 'Référence : ' + T.EDITION.replace(' — Tableau 6.2.2.1 (SI)', '') + ' (tableaux 6.2.2.1, 6.2.2.2, 6.2.5.2 et annexe A)';
     var sel = $('#scenarioSelect');
     sel.innerHTML = state.scenarios.map(function (s) {
       return '<option value="' + esc(s.id) + '"' + (s.id === state.active ? ' selected' : '') + '>' + esc(s.name) + '</option>';
@@ -115,28 +115,34 @@
       rows.push(['Σ Pz / Ps (pers.)', fmt(r.sumPz, 0) + ' / ' + fmt(r.ps, 0)]);
       rows.push(['Diversité D = Ps / ΣPz ' + ref('§6.2.5.3.1', '62.1-2016 §6.2.5.3.1'), fmt(r.D, 3)]);
       rows.push(['Vou (L/s)', fmt(r.vou, 1)]);
-      rows.push(['Ev retenue (' + esc(r.evSource) + ') ' + ref('§6.2.5.3', '62.1-2016 §6.2.5.3 / Tab. 6.2.5.2'), fmt(r.ev, 2)]);
-      rows.push(['Ev simplifiée / tableau', fmt(r.evSimple, 2) + ' / ' + (r.evTab === null ? 'Annexe A' : fmt(r.evTab, 2))]);
-      rows.push(['Zp max — local critique', fmt(r.zpMax, 3) + ' — ' + esc(localName(r.critId))]);
+      rows.push(['<strong>Ev retenue</strong> (' + esc(r.evSource) + ') ' + ref('§6.2.5.2', '62.1-2016 §6.2.5.2 : Ev selon le tableau 6.2.5.2 ou l\'annexe A'), '<strong>' + fmt(r.ev, 2) + '</strong>']);
+      rows.push(['Zp max — local critique ' + ref('éq. 6.2.5.1', 'Zpz = Voz / Vpz'), fmt(r.zpMax, 3) + ' — ' + esc(localName(r.critId))]);
+      rows.push(['Ev tableau 6.2.5.2 (palier / interpolé)', (r.evTab === null ? 'Annexe A' : fmt(r.evTab, 2)) + ' / ' + (r.evTabInterp === null ? 'Annexe A' : fmt(r.evTabInterp, 2))]);
+      rows.push(['Ev annexe A — zone critique ' + ref('A1.3', 'Ev = min(Evz) ; Evz = 1 + Xs − Zpz (A1.2.1)'), r.evA === null ? '—' : fmt(r.evA, 2) + ' — ' + esc(localName(r.evACritId))]);
+      rows.push(['Xs = Vou / Vps ' + ref('A1.1', 'Vps = débit primaire du système' + (r.vpsAuto ? ' (Σ Vpz, saisir Vps dans « Systèmes » pour un VAV)' : '')), r.xs === null ? '—' : fmt(r.xs, 3) + ' (Vps ' + fmt(r.vps, 0) + (r.vpsAuto ? ' = ΣVpz' : '') + ')']);
+      rows.push(['Ev simplifiée ' + ref('62.1-2019+', 'Ev = 0,88·D + 0,22 si D < 0,60, sinon 0,75 — méthode du fichier Excel, absente de 62.1-2016'), fmt(r.evSimple, 2)]);
+      rows.push(['Plancher DCV Σ(Ra·Az) ' + ref('§6.2.7.1.2', 'En ventilation à la demande, Vbz ≥ Ra·Az dans chaque zone (sauf mode veille, note H)'), fmt(r.dcvMin, 0) + ' L/s']);
       steps = [
         'Σ(Rp·Pz) = <code>' + fmt(r.sumOcc, 1) + '</code> L/s ; Σ(Ra·Az) = <code>' + fmt(r.sumSurf, 1) + '</code> L/s',
         'D = Ps / ΣPz = ' + fmt(r.ps, 0) + ' / ' + fmt(r.sumPz, 0) + ' = <code>' + fmt(r.D, 4) + '</code>',
         'Vou = D·Σ(Rp·Pz) + Σ(Ra·Az) = <code>' + fmt(r.vou, 1) + '</code> L/s',
         'Ev simplifiée = ' + (r.D < 0.6 ? '0,88·D + 0,22' : '0,75 (D ≥ 0,60)') + ' = <code>' + fmt(r.evSimple, 3) + '</code>',
-        'Vot = Vou / Ev = ' + fmt(r.vou, 1) + ' / ' + fmt(r.ev, 2) + ' = <code>' + fmt(r.vot, 1) + '</code> L/s'
+        'Tableau 6.2.5.2 : Max(Zpz) = ' + fmt(r.zpMax, 3) + ' → palier <code>' + (r.evTab === null ? 'annexe A' : fmt(r.evTab, 2)) + '</code>, interpolé (note 2) <code>' + (r.evTabInterp === null ? 'annexe A' : fmt(r.evTabInterp, 3)) + '</code>',
+        'Annexe A : Xs = Vou / Vps = ' + fmt(r.vou, 1) + ' / ' + fmt(r.vps, 0) + ' = <code>' + (r.xs === null ? '—' : fmt(r.xs, 3)) + '</code> ; Evz = 1 + Xs − Zpz (ou éq. A1.2.2-1 en recirculation secondaire) ; Ev = min(Evz) = <code>' + (r.evA === null ? '—' : fmt(r.evA, 3)) + '</code>',
+        'Vot = Vou / Ev = ' + fmt(r.vou, 1) + ' / ' + fmt(r.ev, 3) + ' = <code>' + fmt(r.vot, 1) + '</code> L/s ' + ref('éq. 6.2.5.4', '62.1-2016 éq. 6.2.5.4')
       ];
     } else if (r.type === 'monozone') {
       if (r.event) {
         var e = r.event;
         rows.push(['Vbz usage typique (L/s)', fmt(e.vbzTyp, 1)]);
         rows.push(['Vbz événement (L/s)', fmt(e.vbzEvt, 1)]);
-        rows.push(['T = 3·v / Vbz évén. ' + ref('§6.2.6.2', '62.1-2016 §6.2.6.2 — conditions de courte durée'), fmt(e.T, 1) + ' min']);
+        rows.push(['T = 50·v / Vbz évén. ' + ref('éq. 6.2.6.2-2', '62.1-2016 §6.2.6.2 — conditions de courte durée (SI : v en m³, Vbz en L/s, T en min)'), fmt(e.T, 1) + ' min']);
         rows.push(['Vbz moyen sur T / conception', fmt(e.vbzMoy, 1) + ' / ' + fmt(e.vbzConc, 1)]);
         steps = [
           'Composante surface Σ(Ra·Az) = <code>' + fmt(r.sumSurf, 1) + '</code> L/s',
           'Vbz typique = Σ Vbz des locaux = <code>' + fmt(e.vbzTyp, 1) + '</code> L/s',
           'Vbz événement = N·Rp + Σ(Ra·Az) = <code>' + fmt(e.vbzEvt, 1) + '</code> L/s',
-          'v = ΣAz × hauteur = <code>' + fmt(e.volume, 0) + '</code> m³ ; T = 3·v / Vbz = <code>' + fmt(e.T, 1) + '</code> min (durée ' + fmt(e.duration, 0) + ' min)',
+          'v = ΣAz × hauteur = <code>' + fmt(e.volume, 0) + '</code> m³ ; T = 50·v / Vbz = <code>' + fmt(e.T, 1) + '</code> min (durée ' + fmt(e.duration, 0) + ' min)',
           'Vbz moyen = ' + (e.duration >= e.T ? 'Vbz événement (durée ≥ T)' : '(Vbz évén.·durée + Vbz typ.·(T − durée)) / T') + ' = <code>' + fmt(e.vbzMoy, 1) + '</code>',
           'Vot = max(Vbz typ., Vbz moyen) / Ez = <code>' + fmt(r.vot, 1) + '</code> L/s'
         ];
@@ -188,10 +194,12 @@
       '<th>Local</th><th>Système</th><th class="n">Superficie (pi²)</th><th class="n calc">Az (m²)</th><th class="n">Pz ' + info('Population de conception (capacité), §6.2.2.1') + '</th>' +
       '<th>Pointe ' + info('Occupé à la pointe (diversité, §6.2.5.3.1)') + '</th>' +
       '<th>Catégorie – mode assis/usuel</th><th class="n">% assis</th><th>Catégorie – mode actif</th><th class="n">% actif</th><th>Comb.</th>' +
-      '<th class="n">Vpz (L/s) ' + info('Débit d\'air primaire soufflé au local (sert à Zpz)') + '</th>' +
+      '<th class="n">Vpz (L/s) ' + info('Débit d\'air primaire soufflé au local (sert à Zpz, éq. 6.2.5.1)') + '</th>' +
+      '<th class="n">Vdz (L/s) ' + info('Annexe A, recirculation secondaire seulement (ventilo-convecteur, boîte à ventilateur, double conduit) : débit soufflé total au local. Vide = alimentation simple.') + '</th>' +
+      '<th class="n">Er ' + info('Fraction de recirculation secondaire (A1.2.2) : ≈ 0,75 retour plénum, 0 retour gainé, 1 recirculation au niveau système') + '</th>' +
       '<th class="n calc">Rp a / b</th><th class="n calc">Ra</th><th class="n calc">Occ. (L/s)</th><th class="n calc">Surf. (L/s)</th>' +
-      '<th class="n calc">Vbz (L/s)</th><th class="n calc">Voz (L/s)</th><th class="n calc">Zpz</th><th></th></tr></thead><tbody>';
-    if (!locs.length) h += '<tr><td colspan="20" class="empty">Aucun local. Cliquez sur « + Ajouter un local ».</td></tr>';
+      '<th class="n calc">Vbz (L/s)</th><th class="n calc">Voz (L/s)</th><th class="n calc">Zpz</th><th class="n calc">Evz ' + info('Annexe A, multizone : Evz = 1 + Xs − Zpz ou éq. A1.2.2-1') + '</th><th></th></tr></thead><tbody>';
+    if (!locs.length) h += '<tr><td colspan="23" class="empty">Aucun local. Cliquez sur « + Ajouter un local ».</td></tr>';
     locs.forEach(function (l) {
       var z = zmap[l.id] || C.zone(l, T.get, 1, state.params);
       var k = function (f) { return 'data-id="' + esc(l.id) + '" data-f="' + f + '" data-k="' + esc(l.id) + '.' + f + '"'; };
@@ -200,7 +208,8 @@
         '<td><select class="in" ' + k('sysId') + '>' + sysOpts(l.sysId) + '</select></td>' +
         '<td><input class="in w-num" type="number" step="any" min="0" ' + k('ft2') + ' value="' + round(l.ft2, 2) + '"></td>' +
         '<td class="n calc">' + fmt(z.az, 1) + '</td>' +
-        '<td><input class="in w-pct" type="number" step="any" min="0" ' + k('pz') + ' value="' + l.pz + '"></td>' +
+        '<td style="white-space:nowrap"><input class="in w-pct" type="number" step="any" min="0" ' + k('pz') + ' value="' + l.pz + '">' +
+        (z.pzDefault !== null ? ' <button type="button" class="icon" data-action="pz-default" data-id="' + esc(l.id) + '" title="Pz par défaut = densité × Az = ' + fmt(z.pzDefault, 1) + ' pers. (§6.2.2.1.1, exception 2)">↺</button>' : '') + '</td>' +
         '<td style="text-align:center"><input class="in" type="checkbox" ' + k('occ') + (l.occ ? ' checked' : '') + '></td>' +
         '<td>' + catBtn(l, 'catA') + '</td>' +
         '<td><input class="in w-pct" type="number" step="any" min="0" max="100" ' + k('pctA') + ' value="' + round(l.pctA * 100, 2) + '"></td>' +
@@ -208,6 +217,8 @@
         '<td><input class="in w-pct" type="number" step="any" min="0" max="100" ' + k('pctB') + ' value="' + round(l.pctB * 100, 2) + '"></td>' +
         '<td><select class="in" ' + k('combo') + '><option' + (l.combo !== 'Somme' ? ' selected' : '') + '>Max</option><option' + (l.combo === 'Somme' ? ' selected' : '') + '>Somme</option></select></td>' +
         '<td><input class="in w-num" type="number" step="any" min="0" ' + k('vpz') + ' value="' + l.vpz + '"></td>' +
+        '<td><input class="in w-num" type="number" step="any" min="0" ' + k('vdz') + ' value="' + (l.vdz > 0 ? l.vdz : '') + '"></td>' +
+        '<td><input class="in w-pct" type="number" step="0.05" min="0" max="1.2" ' + k('er') + ' value="' + (l.vdz > 0 ? (l.er || 0) : '') + '"' + (l.vdz > 0 ? '' : ' disabled') + '></td>' +
         '<td class="n calc">' + fmt(z.rpA, 1) + ' / ' + fmt(z.rpB, 1) + '</td>' +
         '<td class="n calc">' + fmt(z.ra, 2) + '</td>' +
         '<td class="n calc">' + fmt(z.occ, 1) + '</td>' +
@@ -215,12 +226,13 @@
         '<td class="n calc"><strong>' + fmt(z.vbz, 1) + '</strong></td>' +
         '<td class="n calc">' + fmt(z.voz, 1) + '</td>' +
         '<td class="n calc">' + (z.vpz > 0 ? fmt(z.zpz, 3) : '—') + '</td>' +
+        '<td class="n calc">' + (z.evz !== undefined && z.evz !== null ? fmt(z.evz, 3) : '—') + '</td>' +
         '<td style="white-space:nowrap"><button type="button" class="icon" title="Dupliquer" data-action="loc-dup" data-id="' + esc(l.id) + '">⧉</button> ' +
         '<button type="button" class="icon danger" title="Supprimer" data-action="loc-del" data-id="' + esc(l.id) + '">✕</button></td></tr>';
     });
     var tot = locs.reduce(function (a, l) { var z = zmap[l.id] || C.zone(l, T.get, 1, state.params); a.az += z.az; a.pz += z.pz; a.occ += z.occ; a.surf += z.surf; a.vbz += z.vbz; a.voz += z.voz; return a; }, { az: 0, pz: 0, occ: 0, surf: 0, vbz: 0, voz: 0 });
     h += '</tbody><tfoot><tr><td colspan="3">Total (' + locs.length + ' locaux)</td><td class="n">' + fmt(tot.az, 1) + '</td><td class="n">' + fmt(tot.pz, 0) +
-      '</td><td colspan="9"></td><td class="n">' + fmt(tot.occ, 1) + '</td><td class="n">' + fmt(tot.surf, 1) + '</td><td class="n">' + fmt(tot.vbz, 1) + '</td><td class="n">' + fmt(tot.voz, 1) + '</td><td colspan="2"></td></tr></tfoot></table></div></section>';
+      '</td><td colspan="11"></td><td class="n">' + fmt(tot.occ, 1) + '</td><td class="n">' + fmt(tot.surf, 1) + '</td><td class="n">' + fmt(tot.vbz, 1) + '</td><td class="n">' + fmt(tot.voz, 1) + '</td><td colspan="3"></td></tr></tfoot></table></div></section>';
     return h;
   }
   function catBtn(l, f) {
@@ -235,20 +247,26 @@
     var h = '<section class="panel"><div class="panel-head"><h2>Systèmes — ' + esc(scen.name) + '</h2><div class="toolbar">' +
       '<button type="button" class="primary" data-action="sys-add">+ Ajouter un système</button></div></div>' +
       '<p class="muted small"><strong>Multizone</strong> : Vot = Vou / Ev avec diversité D ' + ref('§6.2.5', '62.1-2016 §6.2.5') + '. ' +
-      '<strong>Zone unique</strong> : Vot = Voz × facteur de courte durée, ou analyse d\'événement (T = 3·v / Vbz) ' + ref('§6.2.6.2', '62.1-2016 §6.2.6.2') + '. ' +
+      '<strong>Zone unique</strong> : Vot = Voz × facteur de courte durée, ou analyse d\'événement (T = 50·v / Vbz) ' + ref('§6.2.6.2', '62.1-2016 §6.2.6.2') + '. ' +
       '<strong>100 % air neuf</strong> : Vot = Σ Voz ' + ref('§6.2.4', '62.1-2016 §6.2.4') + '.</p>' +
+      '<p class="muted small"><strong>Méthodes Ev (multizone)</strong> : « Tableau » = tableau 6.2.5.2 par paliers (comme l\'Excel) ; « Tableau interpolé » = note 2 du tableau ; ' +
+      '« Annexe A » = Ev = min(Evz), avec Xs = Vou / Vps (Vps vide = Σ Vpz des locaux ; pour un VAV, saisir le débit primaire maximal prévu du système) ; ' +
+      '« Simplifiée » = 0,88·D + 0,22 / 0,75, méthode du fichier Excel, introduite après 62.1-2016 (absente de l\'édition 2016).</p>' +
       '<div class="scroll"><table class="grid"><thead><tr><th>Nom</th><th>Type</th><th class="n">Ez ' + info('Tab. 6.2.2.2 : 1,0 en climatisation (soufflage au plafond) ; 0,8 si air chaud soufflé au plafond en chauffage') + '</th>' +
-      '<th>Méthode Ev ' + info('« Simplifiée » : Ev = 0,88·D + 0,22 si D < 0,60, sinon 0,75. « Tableau » : selon Zp max (≤0,15→1,0 … ≤0,55→0,6 ; > 0,55 → annexe A)') + '</th>' +
+      '<th>Méthode Ev ' + info('Tableau 6.2.5.2 (paliers ou interpolé), annexe A, ou simplifiée (0,88·D + 0,22 / 0,75)') + '</th><th class="n">Vps (L/s) ' + info('Débit primaire du système (A1.1). Vide = Σ Vpz des locaux.') + '</th>' +
       '<th class="n">Facteur courte durée (%)</th><th>Événement §6.2.6.2</th><th class="n calc">Locaux</th><th class="n calc">Vot (L/s)</th><th></th></tr></thead><tbody>';
-    if (!scen.systems.length) h += '<tr><td colspan="9" class="empty">Aucun système.</td></tr>';
+    if (!scen.systems.length) h += '<tr><td colspan="10" class="empty">Aucun système.</td></tr>';
     scen.systems.forEach(function (s) {
       var r = res.systems.filter(function (x) { return x.id === s.id; })[0];
       var k = function (f) { return 'data-sid="' + esc(s.id) + '" data-f="' + f + '" data-k="' + esc(s.id) + '.' + f + '"'; };
       var mono = s.type === 'monozone', multi = s.type === 'multizone';
       h += '<tr><td><input class="in" style="min-width:110px" ' + k('name') + ' value="' + esc(s.name) + '"></td>' +
         '<td><select class="in" ' + k('type') + '>' + Object.keys(TYPE_LABEL).map(function (t) { return '<option value="' + t + '"' + (t === s.type ? ' selected' : '') + '>' + TYPE_LABEL[t] + '</option>'; }).join('') + '</select></td>' +
-        '<td><input class="in w-pct" type="number" step="0.05" min="0.1" max="1.5" ' + k('ez') + ' value="' + s.ez + '"></td>' +
-        '<td>' + (multi ? '<select class="in" ' + k('evMethod') + '><option' + (s.evMethod !== 'Tableau' ? ' selected' : '') + '>Simplifiée</option><option' + (s.evMethod === 'Tableau' ? ' selected' : '') + '>Tableau</option></select>' : '<span class="muted">—</span>') + '</td>' +
+        '<td><div style="display:flex;gap:.3rem;align-items:center"><input class="in w-pct" type="number" step="0.05" min="0.1" max="1.5" ' + k('ez') + ' value="' + s.ez + '">' +
+        '<select class="in" title="Tableau 6.2.2.2 — choisir une configuration" ' + k('ezPreset') + ' style="max-width:150px"><option value="">Tab. 6.2.2.2…</option>' +
+        T.EZ.map(function (e, i) { return '<option value="' + i + '">' + fmt(e.ez, 1) + ' — ' + esc(e.label) + '</option>'; }).join('') + '</select></div></td>' +
+        '<td>' + (multi ? '<select class="in" ' + k('evMethod') + '>' + ['Simplifiée', 'Tableau', 'Tableau interpolé', 'Annexe A'].map(function (m) { return '<option' + (s.evMethod === m ? ' selected' : '') + '>' + m + '</option>'; }).join('') + '</select>' : '<span class="muted">—</span>') + '</td>' +
+        '<td>' + (multi ? '<input class="in w-num" type="number" step="any" min="0" placeholder="' + (r ? fmt(r.vpsSum, 0) : '') + '" ' + k('vps') + ' value="' + (s.vps > 0 ? s.vps : '') + '">' : '<span class="muted">—</span>') + '</td>' +
         '<td>' + (mono && !s.event.on ? '<input class="in w-pct" type="number" step="any" min="0" max="100" ' + k('fct') + ' value="' + round(s.fct * 100, 3) + '">' : '<span class="muted">—</span>') + '</td>' +
         '<td>' + (mono ? eventCell(s) : '<span class="muted">—</span>') + '</td>' +
         '<td class="n calc">' + (r ? r.nZones : 0) + '</td><td class="n calc"><strong>' + (r ? fmt(r.vot, 0) : '—') + '</strong></td>' +
@@ -303,20 +321,53 @@
     T.CATEGORIES.forEach(function (c) {
       var hay = norm(c.fr + ' ' + c.en + ' ' + c.groupe);
       if (!words.every(function (w) { return hay.indexOf(w) >= 0; })) return;
-      if (c.groupe !== lastG) { h += '<tr class="group"><td colspan="5">' + esc(c.groupe) + '</td></tr>'; lastG = c.groupe; }
+      if (c.groupe !== lastG) { h += '<tr class="group"><td colspan="8">' + esc(c.groupe) + '</td></tr>'; lastG = c.groupe; }
+      var notes = c.notes ? c.notes.split(',').map(function (n) { n = n.trim(); return '<span class="ref" title="' + esc(n + ' : ' + T.NOTES[n]) + '">' + n + '</span>'; }).join(' ') : '';
       h += '<tr class="' + (pickable ? 'pick' : '') + (c.id === current ? ' current' : '') + '" data-cat="' + c.id + '"><td>' + esc(c.fr) + '</td><td class="muted">' + esc(c.en) +
-        '</td><td class="n">' + fmt(c.rp, 1) + '</td><td class="n">' + fmt(c.ra, 1) + '</td><td class="n">' + (c.densite ? c.densite : '—') + '</td></tr>';
+        '</td><td class="n">' + (c.rp ? fmt(c.rp, 1) : '—') + '</td><td class="n">' + fmt(c.ra, 1) + '</td><td>' + notes + '</td><td class="n">' + (c.densite !== null ? c.densite : '—') +
+        '</td><td class="n">' + (c.combine !== null ? fmt(c.combine, 1) : '') + '</td><td class="n">' + c.classe + '</td></tr>';
     });
-    return h || '<tr><td colspan="5" class="empty">Aucune catégorie ne correspond.</td></tr>';
+    return h || '<tr><td colspan="8" class="empty">Aucune catégorie ne correspond.</td></tr>';
   }
-  function catHead() { return '<thead><tr><th>Catégorie</th><th>Libellé 62.1</th><th class="n">Rp (L/s·pers.)</th><th class="n">Ra (L/s·m²)</th><th class="n">Densité (pers./100 m²)</th></tr></thead>'; }
+  function catHead() {
+    return '<thead><tr><th>Catégorie</th><th>Libellé 62.1</th><th class="n">Rp (L/s·pers.)</th><th class="n">Ra (L/s·m²)</th><th>Notes</th>' +
+      '<th class="n">Densité (pers./100 m²) ' + info('Note 4 : densité par défaut, si la densité réelle est inconnue') + '</th><th class="n">Débit combiné (L/s·pers.) ' + info('Note 5 : Rp + Ra / densité') + '</th><th class="n">Classe d\'air</th></tr></thead>';
+  }
   function norm(s) { return String(s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, ''); }
   function viewTable() {
-    return '<section class="panel"><div class="panel-head"><h2>' + esc(T.EDITION) + '</h2><span class="muted small">' + T.CATEGORIES.length + ' catégories</span></div>' +
-      '<p class="muted small">Minimum Ventilation Rates in Breathing Zone — zones non résidentielles. Vbz = Rp·Pz + Ra·Az. Les logements relèvent d\'ASHRAE 62.2. ' +
-      'Valeurs à confirmer avec l\'exemplaire officiel de la norme et l\'édition exigée par le CNB 2015 modifié Québec.</p>' +
+    var li = function (a) { return a.map(function (x, i) { return '<li>' + esc(x) + '</li>'; }).join(''); };
+    var eq = [
+      ['6.2.2.1', 'Vbz = Rp·Pz + Ra·Az', 'Débit d\'air extérieur dans la zone de respiration'],
+      ['6.2.2.3', 'Voz = Vbz / Ez', 'Débit d\'air extérieur de la zone'],
+      ['6.2.3', 'Vot = Voz', 'Système à zone unique'],
+      ['6.2.4', 'Vot = Σ Voz', 'Système 100 % air extérieur'],
+      ['6.2.5.1', 'Zpz = Voz / Vpz', 'Fraction d\'air extérieur primaire (Vpz : débit primaire minimal prévu en VAV)'],
+      ['6.2.5.3', 'Vou = D·Σ(Rp·Pz) + Σ(Ra·Az)', 'Prise d\'air extérieur non corrigée'],
+      ['6.2.5.3.1', 'D = Ps / Σ Pz', 'Diversité d\'occupation (Ps : population simultanée de pointe)'],
+      ['6.2.5.4', 'Vot = Vou / Ev', 'Prise d\'air extérieur du système multizone'],
+      ['6.2.6.2-2', 'T = 50·v / Vbz', 'Période de moyennage (min ; v en m³, Vbz en L/s) pour les conditions de courte durée'],
+      ['A1.1', 'Xs = Vou / Vps', 'Fraction moyenne d\'air extérieur (Vps : débit primaire du système)'],
+      ['A1.2.1', 'Evz = 1 + Xs − Zpz', 'Efficacité de zone, alimentation simple (réchauffe à débit constant, VAV simple conduit, double conduit à un ventilateur)'],
+      ['A1.2.2-1', 'Evz = (Fa + Xs·Fb − Zpz·Ep·Fc) / Fa', 'Efficacité de zone, recirculation secondaire (boîtes à ventilateur, double conduit à deux ventilateurs)'],
+      ['A1.2.2-2 à 5', 'Fa = Ep + (1 − Ep)·Er ; Fb = Ep ; Fc = 1 − (1 − Ez)(1 − Er)(1 − Ep) ; Ep = Vpz / Vdz', 'Fractions d\'air (Er ≈ 0,1 à 1,2 retour plénum, 0 retour gainé, 1 recirculation système, 0,75 autres)'],
+      ['A1.3', 'Ev = min(Evz)', 'Efficacité de ventilation du système = zone la plus défavorable'],
+      ['§6.2.7.1.2', 'Vbz ≥ Ra·Az', 'Plancher en ventilation à la demande (zéro permis en mode veille, note H)']
+    ];
+    return '<section class="panel"><h2>Équations — ANSI/ASHRAE 62.1-2016</h2><div class="scroll"><table class="grid"><thead><tr><th>Éq.</th><th>Formule</th><th>Objet</th></tr></thead><tbody>' +
+      eq.map(function (e) { return '<tr><td class="muted" style="white-space:nowrap">' + esc(e[0]) + '</td><td><code>' + esc(e[1]) + '</code></td><td>' + esc(e[2]) + '</td></tr>'; }).join('') +
+      '</tbody></table></div><p class="muted small">La méthode « simplifiée » du fichier Excel (Ev = 0,88·D + 0,22 si D &lt; 0,60, sinon 0,75) n\'apparaît pas dans 62.1-2016 ; elle vient d\'une édition ultérieure.</p></section>' +
+      '<div class="form-grid" style="margin-bottom:1rem">' +
+      '<section class="panel" style="margin:0"><h2>Tableau 6.2.2.2 — Efficacité de distribution (Ez)</h2><div class="scroll"><table class="grid"><thead><tr><th>Configuration</th><th class="n">Ez</th></tr></thead><tbody>' +
+      T.EZ.map(function (e) { return '<tr><td>' + esc(e.label) + '</td><td class="n">' + fmt(e.ez, 1) + '</td></tr>'; }).join('') + '</tbody></table></div><ol class="small muted">' + li(T.EZ_NOTES) + '</ol></section>' +
+      '<section class="panel" style="margin:0"><h2>Tableau 6.2.5.2 — Efficacité du système (Ev)</h2><table class="grid"><thead><tr><th>Max(Zpz)</th><th class="n">Ev</th></tr></thead><tbody>' +
+      T.EV_TABLE.map(function (e) { return '<tr><td>≤ ' + fmt(e[0], 2) + '</td><td class="n">' + fmt(e[1], 1) + '</td></tr>'; }).join('') +
+      '<tr><td>&gt; 0,55</td><td class="n">Annexe A</td></tr></tbody></table><ol class="small muted">' + li(T.EV_NOTES) + '</ol></section></div>' +
+      '<section class="panel"><div class="panel-head"><h2>' + esc(T.EDITION) + '</h2><span class="muted small">' + T.CATEGORIES.length + ' catégories</span></div>' +
+      '<p class="muted small">Minimum Ventilation Rates in Breathing Zone. Vbz = Rp·Pz + Ra·Az. Valeurs vérifiées contre l\'exemplaire de la norme 2016 ; l\'édition exigée par le CNB 2015 modifié Québec reste à confirmer. Survolez une note pour son texte.</p>' +
       '<input type="search" id="tableSearch" data-k="tableSearch" placeholder="Rechercher…" value="' + esc(tableQuery) + '" style="width:100%;max-width:420px;padding:.45rem .6rem;border:1px solid var(--border);border-radius:8px;background:var(--surface);margin:.4rem 0 .8rem">' +
-      '<div class="scroll"><table class="grid" id="catTable">' + catHead() + '<tbody>' + catRows(tableQuery) + '</tbody></table></div></section>';
+      '<div class="scroll"><table class="grid" id="catTable">' + catHead() + '<tbody>' + catRows(tableQuery) + '</tbody></table></div>' +
+      '<div class="form-grid small" style="margin-top:.8rem"><div><h3>Notes générales</h3><ol class="muted">' + li(T.NOTES_GENERALES) + '</ol></div>' +
+      '<div><h3>Notes particulières</h3><ul class="muted" style="list-style:none;padding-left:0">' + Object.keys(T.NOTES).map(function (n) { return '<li><strong>' + n + '</strong> — ' + esc(T.NOTES[n]) + '</li>'; }).join('') + '</ul></div></div></section>';
   }
 
   // ---------- Comparaison ----------
@@ -376,11 +427,13 @@
       rows.join('') + '</tbody></table></div></section>' +
       '<section class="panel"><h2>Écarts et observations sur le fichier Excel</h2><ul>' +
       '<li><strong>Ez par système</strong> : le fichier attribue Ez avec <code>SI(système = "UCT-01"; P7; P8)</code> — tout système autre qu\'UCT-01 reçoit l\'Ez d\'UCT-02. L\'application utilise l\'Ez propre à chaque système.</li>' +
+      '<li><strong>Ev simplifiée (0,88·D + 0,22 / 0,75)</strong> : le fichier la cite comme « 62.1-2016 §6.2.5.3 », mais elle n\'existe pas dans 62.1-2016. En 2016, Ev se détermine par le tableau 6.2.5.2 ou l\'annexe A (§6.2.5.2) ; la méthode simplifiée vient d\'une édition ultérieure.</li>' +
+      '<li><strong>Annexe A sur le scénario section 3</strong> : avec Vps = Σ Vpz = 2 305 L/s, Xs = 0,377 et Evz(104) = 1 + 0,377 − 0,901 = 0,476, d\'où Vot UCT-01 ≈ 1 826 L/s au lieu de 1 160 L/s. Augmenter Vpz de la salle 104 (zone critique) réduit fortement cet écart.</li>' +
       '<li><strong>Méthode « Tableau » avec Zp max &gt; 0,55</strong> : le fichier revient silencieusement à l\'Ev simplifiée (<code>ESTNUM</code>). L\'application fait de même mais affiche un avertissement « annexe A requise ».</li>' +
       '<li><strong>Ra = max(Ra assis, Ra actif)</strong> appliqué à toute la superficie : simplification conservatrice du fichier (ex. gymnase section 3 : Ra 0,9 sur 796 m², alors que la section 7.3 répartit aire de jeu / estrades).</li>' +
       '<li><strong>Catégorie « Salle polyvalente / assemblée » (2,5 / 0,3)</strong> : correspond à la ligne « Multipurpose assembly » du groupe Hôtels/motels/dortoirs. Le groupe Enseignement prévoit « Multiuse assembly » à 3,8 / 0,3 — choix à confirmer selon l\'usage.</li>' +
-      '<li><strong>Zp max</strong> de UCT-01 = 0,90 (salle informatique 104, Vpz = 141 L/s) dans les sections 3 et 7 : bien au-delà de 0,55, la méthode « Tableau » n\'est pas applicable ; un calcul selon l\'annexe A pourrait donner un Ev inférieur à 0,75.</li>' +
-      '<li><strong>Éditions</strong> : la procédure multizone et la numérotation des § suivent 62.1-2016 (comme le fichier). Dans les éditions 2019 et 2022, la procédure multizone détaillée est à l\'annexe A.</li>' +
+      '<li><strong>Zp max</strong> de UCT-01 = 0,90 (salle informatique 104, Vpz = 141 L/s) dans les sections 3 et 7 : bien au-delà de 0,55, le tableau 6.2.5.2 renvoie à l\'annexe A (méthode « Annexe A » disponible dans l\'onglet Systèmes).</li>' +
+      '<li><strong>Table 6.2.2.1</strong> : les Rp / Ra des 10 catégories du fichier sont conformes à 62.1-2016.</li>' +
       '</ul></section>';
   }
 
@@ -412,22 +465,23 @@
     row(['Δh été (kJ/kg)', csvNum(res.psy.dh), 'ΔT hiver (°C)', csvNum(res.psy.dT)]);
     L.push('');
     row(['LOCAUX']);
-    row(['Local', 'Système', 'Superficie (pi²)', 'Az (m²)', 'Pz', 'Occupé pointe', 'Catégorie assis', '% assis', 'Catégorie actif', '% actif', 'Combinaison', 'Vpz (L/s)', 'Rp assis', 'Rp actif', 'Ra', 'Comp. occupants (L/s)', 'Comp. surface (L/s)', 'Vbz (L/s)', 'Ez', 'Voz (L/s)', 'Zpz']);
+    row(['Local', 'Système', 'Superficie (pi²)', 'Az (m²)', 'Pz', 'Occupé pointe', 'Catégorie assis', '% assis', 'Catégorie actif', '% actif', 'Combinaison', 'Vpz (L/s)', 'Vdz (L/s)', 'Er', 'Rp assis', 'Rp actif', 'Ra', 'Comp. occupants (L/s)', 'Comp. surface (L/s)', 'Vbz (L/s)', 'Ez', 'Voz (L/s)', 'Zpz', 'Evz (annexe A)']);
     var zmap = {}; res.systems.forEach(function (s) { s.zones.forEach(function (z) { zmap[z.id] = z; }); });
     scen.locals.forEach(function (l) {
       var z = zmap[l.id] || C.zone(l, T.get, 1, p), a = T.get(l.catA), b = T.get(l.catB);
       row([csvTxt(l.name), csvTxt(sysName(l.sysId)), csvNum(l.ft2, 2), csvNum(z.az), csvNum(l.pz), l.occ ? 1 : 0, csvTxt(a ? a.fr : ''), csvNum(l.pctA), csvTxt(b ? b.fr : ''), csvNum(l.pctB), l.combo,
-        csvNum(l.vpz), csvNum(z.rpA), csvNum(z.rpB), csvNum(z.ra), csvNum(z.occ), csvNum(z.surf), csvNum(z.vbz), csvNum(z.ez), csvNum(z.voz), csvNum(z.zpz)]);
+        csvNum(l.vpz), l.vdz > 0 ? csvNum(l.vdz) : '', l.vdz > 0 ? csvNum(l.er || 0) : '', csvNum(z.rpA), csvNum(z.rpB), csvNum(z.ra), csvNum(z.occ), csvNum(z.surf), csvNum(z.vbz), csvNum(z.ez), csvNum(z.voz), csvNum(z.zpz), csvNum(z.evz)]);
     });
     L.push('');
     row(['RÉSULTATS PAR SYSTÈME']);
-    row(['Système', 'Type', 'Ez', 'Σ Pz', 'Ps', 'D', 'Σ comp. occupants (L/s)', 'Σ comp. surface (L/s)', 'Vou (L/s)', 'Ev simplifiée', 'Zp max', 'Local critique', 'Ev tableau', 'Ev retenue', 'Vot (L/s)', 'Vot (pi³/min)', 'Refroidissement (t)', 'Refroidissement (kW)', 'Chauffage (kW)', 'Avertissements']);
+    row(['Système', 'Type', 'Ez', 'Σ Pz', 'Ps', 'D', 'Σ comp. occupants (L/s)', 'Σ comp. surface (L/s)', 'Vou (L/s)', 'Ev simplifiée', 'Zp max', 'Local critique', 'Ev tableau', 'Ev tableau interpolé', 'Vps (L/s)', 'Xs', 'Ev annexe A', 'Méthode Ev', 'Ev retenue', 'Vot (L/s)', 'Vot (pi³/min)', 'Refroidissement (t)', 'Refroidissement (kW)', 'Chauffage (kW)', 'Avertissements']);
     res.systems.forEach(function (r) {
       row([csvTxt(r.name), TYPE_LABEL[r.type], csvNum(r.ez), csvNum(r.sumPz), csvNum(r.ps), csvNum(r.D), csvNum(r.sumOcc), csvNum(r.sumSurf), csvNum(r.vou), csvNum(r.evSimple), csvNum(r.zpMax),
-        csvTxt(r.critId ? localName(r.critId) : ''), r.type === 'multizone' ? (r.evTab === null ? 'Annexe A' : csvNum(r.evTab)) : '', csvNum(r.ev), csvNum(r.vot, 1), csvNum(r.votCfm, 0),
+        csvTxt(r.critId ? localName(r.critId) : ''), r.type === 'multizone' ? (r.evTab === null ? 'Annexe A' : csvNum(r.evTab)) : '', r.type === 'multizone' ? (r.evTabInterp === null ? 'Annexe A' : csvNum(r.evTabInterp)) : '',
+        csvNum(r.vps, 1), csvNum(r.xs), csvNum(r.evA), csvTxt(r.evSource || ''), csvNum(r.ev), csvNum(r.vot, 1), csvNum(r.votCfm, 0),
         csvNum(r.coolTons, 2), csvNum(r.coolKw, 1), csvNum(r.heatKw, 1), csvTxt(r.warnings.join(' | '))]);
     });
-    row(['TOTAL', '', '', '', '', '', '', '', '', '', '', '', '', '', csvNum(res.total.vot, 1), csvNum(res.total.votCfm, 0), csvNum(res.total.coolTons, 2), '', csvNum(res.total.heatKw, 1)]);
+    row(['TOTAL', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', csvNum(res.total.vot, 1), csvNum(res.total.votCfm, 0), csvNum(res.total.coolTons, 2), '', csvNum(res.total.heatKw, 1)]);
     exportBox('CSV — ' + scen.name, L.join('\r\n'), slug(scen.name) + '.csv', 'text/csv;charset=utf-8', '\uFEFF');
   }
   function slug(s) { return norm(s).replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'scenario'; }
@@ -494,10 +548,11 @@
     var f = el.getAttribute('data-f');
     if (el.hasAttribute('data-id') && f) {
       var l = sc().locals.filter(function (x) { return x.id === el.getAttribute('data-id'); })[0];
-      if (l) { l[f] = readVal(el, f); renderSoon(); }
+      if (l) { l[f] = readVal(el, f); if (f === 'vdz' && l.vdz > 0 && l.er === undefined) l.er = 0.75; renderSoon(); }
     } else if (el.hasAttribute('data-sid') && f) {
       var s = sc().systems.filter(function (x) { return x.id === el.getAttribute('data-sid'); })[0];
-      if (s) { setPath(s, f, readVal(el, f)); if (f === 'ez' && !(s.ez > 0)) s.ez = 1; renderSoon(); }
+      if (s && f === 'ezPreset') { if (el.value !== '') s.ez = T.EZ[+el.value].ez; renderSoon(); }
+      else if (s) { setPath(s, f, readVal(el, f)); if (f === 'ez' && !(s.ez > 0)) s.ez = 1; renderSoon(); }
     } else if (el.hasAttribute('data-p')) {
       var pth = el.getAttribute('data-p');
       setPath(state.params, pth, readVal(el, pth)); renderSoon();
@@ -553,6 +608,10 @@
         scen.locals.push(nl); render();
         var inp = $('[data-k="' + nl.id + '.name"]'); if (inp) { inp.focus(); inp.select(); }
         return;
+      case 'pz-default':
+        var lp = scen.locals.filter(function (x) { return x.id === id; })[0], cz = T.get(lp.catA);
+        if (cz && cz.densite) lp.pz = round(cz.densite * lp.ft2 * state.params.ft2m2 / 100, 1);
+        break;
       case 'loc-dup':
         var src = scen.locals.filter(function (x) { return x.id === id; })[0], cp = clone(src);
         cp.id = uid('l'); cp.name = src.name + ' (copie)';
