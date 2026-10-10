@@ -37,7 +37,7 @@ VSample.scenarios().forEach(function (sc) {
   });
 });
 
-// 62.1-2016 : tableau 6.2.5.2 (paliers et interpolation) et annexe A
+// Tableau 6.2.5.2 de 62.1-2016 (paliers et interpolation) et annexe A de 62.1-2022
 cmp('evTable(0.30)', VCalc.evTable(0.30), 0.8);
 cmp('evTableInterp(0.30)', VCalc.evTableInterp(0.30), 0.85);
 cmp('evTableInterp(0.15)', VCalc.evTableInterp(0.15), 1.0);
@@ -53,10 +53,25 @@ cmp('evZone recirc Ez 0.8', VCalc.evZone({ vdz: 200, vpz: 100, zpz: 0.5, ez: 0.8
   var vou = ref.sc3.s1.vou, xs = vou / 2305, ev = 1 + xs - 0.9010269966241135;
   cmp('annexe A sc3 Vps', r.vps, 2305); cmp('annexe A sc3 Xs', r.xs, xs); cmp('annexe A sc3 Ev', r.ev, ev); cmp('annexe A sc3 Vot', r.vot, vou / ev);
 })();
-// Table 6.2.2.1 (2016) : quelques valeurs vérifiées
+// Table 6-1 (2022) : quelques valeurs vérifiées
+cmp('nombre de catégories', T621.CATEGORIES.length, 90);
 cmp('daycare sickroom densité', T621.get('edu_daycare_sick').densite, 25);
-cmp('dwelling unit Rp', T621.get('res_dwelling').rp, 2.5);
+cmp('animal exam Ra', T621.get('anim_exam').ra, 0.6);
+cmp('animal imaging Ra', T621.get('anim_imaging').ra, 0.9);
+cmp('libraries (enseignement) Rp', T621.get('edu_library').rp, 2.5);
+cmp('fabrication dangereuse classe', T621.get('misc_manufacturing_haz').classe, 3);
 cmp('office combiné', T621.get('off_office').combine, 8.5);
+cmp('spectateurs OS', T621.get('sport_spectator').os ? 1 : 0, 1);
+cmp('gym OS', T621.get('sport_gym').os ? 1 : 0, 0);
+// Table 6-4 (2022)
+cmp('Ez plafond chaud < 8 °C, jet lent', T621.EZ[3].ez, 0.8);
+cmp('Ez stratifié retour > 5,5 m', T621.EZ[11].ez, 1.5);
+// Éq. 6-9 : Vpz-min = 1,5·Voz ; salle 104 (Voz 127,04, Vpz 141) non conforme en procédure simplifiée
+(function () {
+  var r = VCalc.scenario(VSample.scenarios()[0], p, T621.get).systems[0];
+  cmp('Vpz-min 104', r.zones[4].vpzMin, 1.5 * 127.044806524);
+  cmp('locaux Vpz < Vpz-min', r.vpzMinShort.length, 1);
+})();
 
 console.log(checks + ' vérifications, ' + fails + ' échec(s).');
 process.exit(fails ? 1 : 0);

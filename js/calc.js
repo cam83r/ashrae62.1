@@ -1,6 +1,7 @@
 /*
  * Moteur de calcul — reproduit l'onglet « Calcul Ville » de
- * D-449.1_Aide_decision_UCT_CRCL_v2.xlsx (sections 2, 3, 4, 5 et 7.3).
+ * D-449.1_Aide_decision_UCT_CRCL_v2.xlsx (sections 2, 3, 4, 5 et 7.3),
+ * procédure du taux de ventilation d'ANSI/ASHRAE 62.1-2022 (§6.2, annexe A).
  * Aucune dépendance au DOM : utilisable dans le navigateur et sous Node (tests).
  */
 (function (root) {
@@ -61,7 +62,7 @@
     var voz = vbz / e;
     var vpz = num(loc.vpz);
     var zpz = vpz > 0 ? voz / vpz : 0;
-    // Densité par défaut (§6.2.2.1.1, exception 2) : catégorie du mode assis/usuel
+    // Densité par défaut (62.1-2022 §6.2.1.1.7, exception 2) : catégorie du mode assis/usuel
     var pzDefault = catA && catA.densite ? catA.densite * az / 100 : null;
     return {
       id: loc.id, az: az, pz: pz, occupied: !!loc.occ, rpA: rpA, rpB: rpB, ra: ra,
@@ -70,23 +71,23 @@
     };
   }
 
-  // Tableau 6.2.5.2, note 2 : interpolation linéaire entre 0,15 et 0,55
+  // 62.1-2016 tableau 6.2.5.2, note 2 : interpolation linéaire entre 0,15 et 0,55 (méthode retirée en 2019)
   function evTableInterp(zp) {
     if (zp <= 0.15) return 1.0;
     if (zp > 0.55) return null;
     return 1.15 - zp; // droite passant par (0,15 ; 1,0) et (0,55 ; 0,6)
   }
 
-  // Annexe A — efficacité de ventilation d'une zone (Evz)
-  //  alimentation simple : Evz = 1 + Xs − Zpz (A1.2.1)
-  //  recirculation secondaire : Evz = (Fa + Xs·Fb − Zpz·Ep·Fc) / Fa (A1.2.2-1)
+  // Annexe A (62.1-2022) — efficacité de ventilation d'une zone (Evz)
+  //  alimentation simple : Evz = 1 + Xs − Zpz (éq. A-2)
+  //  recirculation secondaire : Evz = (Fa + Xs·Fb − Zpz·Ep·Fc) / Fa (éq. A-4)
   function evZone(z, xs) {
     if (z.vdz > 0) {
-      var ep = Math.min(1, z.vpz / z.vdz);          // A1.2.2-5
+      var ep = Math.min(1, z.vpz / z.vdz);          // A-8
       var er = z.er;
-      var fa = ep + (1 - ep) * er;                   // A1.2.2-2
-      var fb = ep;                                   // A1.2.2-3
-      var fc = 1 - (1 - z.ez) * (1 - er) * (1 - ep); // A1.2.2-4
+      var fa = ep + (1 - ep) * er;                   // A-5
+      var fb = ep;                                   // A-6
+      var fc = 1 - (1 - z.ez) * (1 - er) * (1 - ep); // A-7
       return { evz: fa > 0 ? (fa + xs * fb - z.zpz * ep * fc) / fa : null, ep: ep, fa: fa, fb: fb, fc: fc, recirc: true };
     }
     return { evz: 1 + xs - z.zpz, ep: 1, recirc: false };
@@ -122,7 +123,7 @@
         var vbzTyp = r.sumVbz;
         var vbzEvt = num(ev.n) * rpE + r.sumSurf;
         var vol = zones.reduce(function (s, z) { return s + z.az; }, 0) * num(ev.height);
-        var T = vbzEvt > 0 ? 50 * vol / vbzEvt : 0;                      // éq. 6.2.6.2-2 (SI), minutes
+        var T = vbzEvt > 0 ? 50 * vol / vbzEvt : 0;                      // éq. 6-11b (SI), minutes
         var dur = num(ev.duration);
         var vbzMoy = dur >= T ? vbzEvt : (vbzEvt * dur + vbzTyp * (T - dur)) / T;
         var vbzConc = Math.max(vbzTyp, vbzMoy);
@@ -133,7 +134,7 @@
       } else {
         r.voz = r.sumVoz;
         r.vot = r.voz * fct;
-        if (fct < 1) r.warnings.push('Facteur de courte durée < 100 % : justifier T = 3·v/Vbz (§6.2.6.2).');
+        if (fct < 1) r.warnings.push('Facteur de courte durée < 100 % : justifier T = 50·v/Vbz (§6.2.5.2, éq. 6-11b).');
       }
       if (zones.length > 1 && !(sys.event && sys.event.on)) {
         r.warnings.push('Système à zone unique avec plusieurs locaux : Voz = Σ Voz des locaux.');
@@ -152,7 +153,7 @@
       r.evTab = evTable(r.zpMax);
       r.evTabInterp = evTableInterp(r.zpMax);
 
-      // Annexe A : Xs = Vou / Vps (A1.1) ; Ev = min(Evz) (A1.3)
+      // Annexe A : Xs = Vou / Vps (A-1) ; Ev = min(Evz) (A-9)
       r.vpsSum = zones.reduce(function (s, z) { return s + z.vpz; }, 0);
       r.vpsAuto = !(num(sys.vps) > 0);
       r.vps = r.vpsAuto ? r.vpsSum : num(sys.vps);
@@ -182,18 +183,24 @@
         if (r.evMethod === 'Annexe A') {
           r.warnings.push(r.evA !== null ? 'Annexe A : Ev = ' + r.evA.toFixed(2) + ' ≤ 0 — augmenter Vpz du local critique ou Vps. Ev simplifiée retenue.' : 'Annexe A : aucun Vpz saisi. Ev simplifiée retenue.');
         } else {
-          r.warnings.push('Zp max > 0,55 : tableau 6.2.5.2 non applicable (annexe A requise) — Ev simplifiée retenue, comme dans le fichier Excel.');
+          r.warnings.push('Zp max > 0,55 : tableau 6.2.5.2 (62.1-2016) non applicable — Ev simplifiée retenue, comme dans le fichier Excel.');
         }
       }
       r.vot = r.ev > 0 ? r.vou / r.ev : 0;
-      if (r.zpMax > 0.55 && r.evMethod !== 'Annexe A') r.warnings.push('Zp max = ' + r.zpMax.toFixed(2) + ' > 0,55 : le tableau 6.2.5.2 renvoie à l\'annexe A (Ev annexe A = ' + (r.evA === null ? '—' : r.evA.toFixed(2)) + ').');
+      // Procédure simplifiée (§6.2.4.3.2, éq. 6-9) : débit primaire minimal de zone Vpz-min = 1,5·Voz
+      r.vpzMinShort = [];
+      zones.forEach(function (z) { z.vpzMin = 1.5 * z.voz; if (z.vpz > 0 && z.vpz < z.vpzMin - 1e-9) r.vpzMinShort.push(z.id); });
+      if (r.evSource === 'Simplifiée' && r.vpzMinShort.length) {
+        r.warnings.push('Procédure simplifiée : ' + r.vpzMinShort.length + ' local(aux) avec Vpz < Vpz-min = 1,5·Voz (éq. 6-9). Augmenter Vpz ou utiliser l\'annexe A (Ev annexe A = ' + (r.evA === null ? '—' : r.evA.toFixed(2)) + ').');
+      }
+      if (r.evMethod.indexOf('Tableau') === 0 && r.zpMax > 0.55) r.warnings.push('Zp max = ' + r.zpMax.toFixed(2) + ' > 0,55 : le tableau 6.2.5.2 (2016) renvoie à l\'annexe A (Ev annexe A = ' + (r.evA === null ? '—' : r.evA.toFixed(2)) + ').');
       if (zones.some(function (z) { return z.vpz <= 0; })) r.warnings.push('Un ou plusieurs locaux sans Vpz : Zpz = 0 (exclus du local critique).');
     }
 
     if (zones.some(function (z) { return z.missingCat; })) r.warnings.push('Catégorie 62.1 manquante pour au moins un local.');
     if (!zones.length) r.warnings.push('Aucun local assigné.');
 
-    // Plancher DCV (§6.2.7.1.2) : la zone de respiration ne descend pas sous Ra·Az
+    // Plancher DCV (§6.2.6.1.2) : la zone de respiration ne descend pas sous Ra·Az
     r.dcvMin = r.sumSurf;
     r.votCfm = r.vot * LS_TO_CFM;
     var ld = loads(r.vot, p, psy);
